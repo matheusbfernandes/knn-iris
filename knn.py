@@ -1,14 +1,16 @@
 import numpy as np
 from sklearn.datasets import load_iris
-from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
 
 
 class KNN(object):
-    def __init__(self, dados_x, dados_y, k_visinhos):
+    def __init__(self, dados_x, dados_y, k_vizinhos):
         self.dados_x = dados_x
         self.dados_y = dados_y
-        self.k_visinhos = k_visinhos
+        self.k_vizinhos = k_vizinhos
 
     # função responsável por retornar a distância euclidiana entre a instância e os dados de treino
     def _distancia_euclidiana(self, dado_teste):
@@ -18,7 +20,7 @@ class KNN(object):
     def _get_vizinhos(self, dado_teste):
         vizinhos = []
         distancias_do_dado = self._distancia_euclidiana(dado_teste)
-        for _ in range(self.k_visinhos):
+        for _ in range(self.k_vizinhos):
             pos_menor = np.argmin(distancias_do_dado)
             vizinhos.append((np.amin(distancias_do_dado), pos_menor))
             distancias_do_dado = np.delete(distancias_do_dado, pos_menor, axis=0)
@@ -51,11 +53,26 @@ class KNN(object):
                 predito[i] = self._escolher_classe(vizinhos)
             return predito
 
-    # mostra a taxa de acertos que o algoritmo atingiu (número que varia de 0 até 1)
-    def taxa_acerto(self, dados_entrada, dados_saida):
+    # gera as métricas de avaliação para o dataset, sendo elas: Precison, Recall, F1-Score e Accuracy
+    def metricas_avaliacao(self, dados_entrada, dados_saida):
+        resultado = "+---------------------------------------+\n"
+        resultado += "|  -  | Precision |  Recall  | F1-score |\n"
+        classes = self._get_classes()
         predito = self.predizer(dados_entrada)
-        return np.sum((dados_saida == predito).astype(float)) / dados_saida.shape[0]
+        cm = self.matriz_confusao(dados_saida, predito)
+        diagonal = np.diag(cm)
+        for i in range(classes.shape[0]):
+            precision = diagonal[i] / np.sum(cm[:, i])
+            recall = diagonal[i] / np.sum(np.where(dados_saida == classes[i])[0].shape[0])
+            f1_score = 2 * precision * recall / (precision + recall)
+            resultado += "|{:^5d}|{:^11.2f}|{:^10.2f}|{:^10.2f}|\n".format(int(classes[i]), precision, recall, f1_score)
+        resultado += "+---------------------------------------+\n"
+        resultado += "Accuracy: {:.2%}".format(np.sum((dados_saida == predito).astype(float)) / dados_saida.shape[0])
+        return resultado
 
+    # gera a matriz de confusão baseado em dois parâmetros:
+    # dados_reais -> indica os valores verdadeiros dos labels
+    # dados_preditos -> indica os valores profetizados pelo algoritmo
     def matriz_confusao(self, dados_reais, dados_preditos):
         classes = self._get_classes(dados_reais).shape[0]
         matriz_confusao = np.zeros((classes, classes))
@@ -70,15 +87,17 @@ def main():
     dados_x, dados_y = load_iris(return_X_y=True)
     # dados_x, teste_x, dados_y, teste_y = train_test_split(dados_x, dados_y, test_size=0.2, random_state=42)
 
-    knn = KNN(dados_x, dados_y, 4)
-    print("Taxa de acerto: {:.2f}%".format(knn.taxa_acerto(dados_x, dados_y) * 100))
-    print(knn.matriz_confusao(dados_y, knn.predizer(dados_x)))
-    # print("Taxa de acerto: {:.2f}%".format(knn.taxa_acerto(teste_x[:, :2], teste_y) * 100))
+    knn = KNN(dados_x, dados_y, 1)
+    # print(classification_report(dados_y, knn.predizer(dados_x)))
+    print(knn.metricas_avaliacao(dados_x, dados_y))
+    # print(knn.matriz_confusao(dados_y, knn.predizer(dados_x)))
+    # print(confusion_matrix(dados_y, knn.predizer(dados_x)))
 
-    knn_sk = KNeighborsClassifier(4, algorithm='brute', p=2)
+    knn_sk = KNeighborsClassifier(1, algorithm='brute', p=2)
     knn_sk.fit(dados_x, dados_y)
     print(knn_sk.score(dados_x, dados_y) * 100)
-    print(knn.matriz_confusao(dados_y, knn_sk.predict(dados_x)))
+    # print(knn.matriz_confusao(dados_y, knn_sk.predict(dados_x)))
+    # print(classification_report(dados_y, knn.predizer(dados_x)))
     # print(knn_sk.score(teste_x, teste_y) * 100)
 
 
