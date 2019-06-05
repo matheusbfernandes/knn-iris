@@ -1,78 +1,77 @@
 import numpy as np
 from sklearn.datasets import load_iris
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
-from sklearn.metrics import confusion_matrix
 
 
 class KNN(object):
-    def __init__(self, dados_x, dados_y, k_vizinhos):
-        self.dados_x = dados_x
-        self.dados_y = dados_y
+    def __init__(self, treino_x, treino_y, k_vizinhos):
+        self.treino_x = treino_x
+        self.treino_y = treino_y
         self.k_vizinhos = k_vizinhos
 
     # função responsável por retornar a distância euclidiana entre a instância e os dados de treino
-    def _distancia_euclidiana(self, dado_teste):
-        return np.linalg.norm(dado_teste - self.dados_x, axis=1, keepdims=True)
+    def _distancia_euclidiana(self, valor_exemplo):
+        return np.linalg.norm(valor_exemplo - self.treino_x, axis=1)
 
     # função responsável por retornar os k-vizinhos mais próximos, baseado na distância euclidiana
-    def _get_vizinhos(self, dado_teste):
-        vizinhos = []
-        distancias_do_dado = self._distancia_euclidiana(dado_teste)
-        for _ in range(self.k_vizinhos):
-            pos_menor = np.argmin(distancias_do_dado)
-            vizinhos.append((np.amin(distancias_do_dado), pos_menor))
-            distancias_do_dado = np.delete(distancias_do_dado, pos_menor, axis=0)
-        return vizinhos
+    def _get_vizinhos(self, valor_exemplo):
+        distancias_do_dado = self._distancia_euclidiana(valor_exemplo)
+        vizinhos = np.concatenate((distancias_do_dado.reshape(distancias_do_dado.shape[0], 1), self.treino_y.reshape(self.treino_y.shape[0], 1)), axis=1)
+        vizinhos = vizinhos[vizinhos[:, 0].argsort(kind="heapsort")]
 
-    def _get_classes(self, dados_reais=None):
-        if dados_reais is None:
-            dados_reais = self.dados_y
-        return np.unique(dados_reais)
+        return vizinhos[:self.k_vizinhos, :]
 
-    # escolhe a classe da instância, baseado na quantidade dos k-vizinhos próximos daquela classe
+    def _get_classes(self, dados=None):
+        if dados is None:
+            dados = self.treino_y
+        return np.unique(dados)
+
+    # faz a votação para escolher a classe da instância
     def _escolher_classe(self, vizinhos):
         classes = self._get_classes()
         classes[:] = 0
         for vizinho in vizinhos:
-            posicao = vizinho[1]
-            classe = self.dados_y[posicao]
+            classe = int(vizinho[1])
             classes[classe] += 1
+
         return np.argmax(classes)
 
     # prediz qual classe uma determinada instância, ou instâncias, pertence
-    def predizer(self, dado_teste):
-        if dado_teste.shape[0] == self.dados_x.shape[1]:
-            vizinhos = self._get_vizinhos(dado_teste)
+    # pode receber como parâmetro um dado individual, ou um numpy array
+    def predizer(self, valor_exemplo):
+        if valor_exemplo.shape[0] == self.treino_x.shape[1]:
+            vizinhos = self._get_vizinhos(valor_exemplo)
             return self._escolher_classe(vizinhos)
         else:
-            predito = np.empty(dado_teste.shape[0])
-            for i in range(dado_teste.shape[0]):
-                vizinhos = self._get_vizinhos(dado_teste[i])
+            predito = np.empty(valor_exemplo.shape[0])
+            for i in range(valor_exemplo.shape[0]):
+                vizinhos = self._get_vizinhos(valor_exemplo[i])
                 predito[i] = self._escolher_classe(vizinhos)
             return predito
 
-    # gera as métricas de avaliação para o dataset, sendo elas: Precison, Recall, F1-Score e Accuracy
-    def metricas_avaliacao(self, dados_entrada, dados_saida):
-        resultado = "+---------------------------------------+\n"
-        resultado += "|  -  | Precision |  Recall  | F1-score |\n"
+    # recebe como parâmetros dois numpy arrays e gera as métricas de avaliação para o dataset,
+    # sendo elas: Precison, Recall, F1-Score e Accuracy
+    def metricas_avaliacao(self, entrada_x, saida_y):
         classes = self._get_classes()
-        predito = self.predizer(dados_entrada)
-        cm = self.matriz_confusao(dados_saida, predito)
+        predito = self.predizer(entrada_x)
+        cm = self.matriz_confusao(saida_y, predito)
         diagonal = np.diag(cm)
+
+        resultado = "+--------------------------------------+\n"
+        resultado += "|  -  | Precisão |  Recall  | F1-Score |\n"
         for i in range(classes.shape[0]):
             precision = diagonal[i] / np.sum(cm[:, i])
-            recall = diagonal[i] / np.sum(np.where(dados_saida == classes[i])[0].shape[0])
+            recall = diagonal[i] / np.sum(np.where(saida_y == classes[i])[0].shape[0])
             f1_score = 2 * precision * recall / (precision + recall)
-            resultado += "|{:^5d}|{:^11.2f}|{:^10.2f}|{:^10.2f}|\n".format(int(classes[i]), precision, recall, f1_score)
-        resultado += "+---------------------------------------+\n"
-        resultado += "Accuracy: {:.2%}".format(np.sum((dados_saida == predito).astype(float)) / dados_saida.shape[0])
+            resultado += "|{:^5d}|{:^10.2f}|{:^10.2f}|{:^10.2f}|\n".format(int(classes[i]), precision, recall, f1_score)
+        resultado += "+--------------------------------------+\n"
+        resultado += "Acurácia: {:.2%}".format(np.sum((saida_y == predito).astype(float)) / saida_y.shape[0])
+
         return resultado
 
     # gera a matriz de confusão baseado em dois parâmetros:
-    # dados_reais -> indica os valores verdadeiros dos labels
-    # dados_preditos -> indica os valores profetizados pelo algoritmo
+    # dados_reais -> numpy array que indica os valores verdadeiros dos labels
+    # dados_preditos -> numpy array que indica os valores profetizados pelo algoritmo
     def matriz_confusao(self, dados_reais, dados_preditos):
         classes = self._get_classes(dados_reais).shape[0]
         matriz_confusao = np.zeros((classes, classes))
@@ -85,20 +84,20 @@ class KNN(object):
 def main():
     # carregando o dataset Iris.csv
     dados_x, dados_y = load_iris(return_X_y=True)
-    # dados_x, teste_x, dados_y, teste_y = train_test_split(dados_x, dados_y, test_size=0.2, random_state=42)
+    treino_x, teste_x, treino_y, teste_y = train_test_split(dados_x, dados_y, test_size=0.2, random_state=42)
 
-    knn = KNN(dados_x, dados_y, 1)
-    # print(classification_report(dados_y, knn.predizer(dados_x)))
-    print(knn.metricas_avaliacao(dados_x, dados_y))
-    # print(knn.matriz_confusao(dados_y, knn.predizer(dados_x)))
-    # print(confusion_matrix(dados_y, knn.predizer(dados_x)))
+    # iniciando o algoritmo
+    knn = KNN(treino_x, treino_y, 7)
 
-    knn_sk = KNeighborsClassifier(1, algorithm='brute', p=2)
-    knn_sk.fit(dados_x, dados_y)
-    print(knn_sk.score(dados_x, dados_y) * 100)
-    # print(knn.matriz_confusao(dados_y, knn_sk.predict(dados_x)))
-    # print(classification_report(dados_y, knn.predizer(dados_x)))
-    # print(knn_sk.score(teste_x, teste_y) * 100)
+    # realizando os cálculos no training set
+    print("Resultados obtidos do training set:")
+    print(knn.metricas_avaliacao(treino_x, treino_y))
+    print("\nMatriz de confusão:\n{:s}".format(str(knn.matriz_confusao(treino_y, knn.predizer(treino_x)))))
+
+    # realizando os cálculos no test set
+    print("\n\nResultados obtidos do test set:")
+    print(knn.metricas_avaliacao(teste_x, teste_y))
+    print("\nMatriz de confusão:\n{:s}".format(str(knn.matriz_confusao(teste_y, knn.predizer(teste_x)))))
 
 
 if __name__ == "__main__":
